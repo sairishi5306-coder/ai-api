@@ -1,23 +1,34 @@
-from flask import Flask, request, jsonify
-
-app = Flask(__name__)
-
-@app.route("/")
-def home():
-    return "AI API is running"
-
-@app.route("/ask", methods=["POST"])
+@app.route("/ask", methods=["GET", "POST"])
 def ask():
-    data = request.get_json()
-    question = data.get("question", "")
+    if request.method == "GET":
+        message = request.args.get("message")
+        key = request.args.get("key")
+    else:
+        data = request.get_json(silent=True) or {}
+        message = data.get("message")
+        key = data.get("key")
 
-    if not question:
-        return jsonify({"answer": "Question empty"}), 400
+    if key != "SGXCODEX":
+        return jsonify({"error": "Invalid API Key"}), 401
 
-    # Simple demo AI reply
-    answer = f"You asked: {question}"
+    if not message:
+        return jsonify({"error": "Message missing"}), 400
 
-    return jsonify({"answer": answer})
+    headers = {
+        "Authorization": f"Bearer {SAMBA_API_KEY}",
+        "Content-Type": "application/json",
+    }
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    payload = {
+        "model": "ALLaM-7B-Instruct-preview",
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant"},
+            {"role": "user", "content": message}
+        ]
+    }
+
+    r = requests.post(SAMBA_URL, headers=headers, json=payload, timeout=30)
+    data = r.json()
+
+    reply = data["choices"][0]["message"]["content"]
+    return jsonify({"reply": reply})
