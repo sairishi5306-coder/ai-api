@@ -19,6 +19,9 @@ def ask():
     if not msg:
         return jsonify({"error": "No message provided"}), 400
 
+    if not GEMINI_API_KEY:
+        return jsonify({"error": "GEMINI_API_KEY not set"}), 500
+
     url = (
         "https://generativelanguage.googleapis.com/v1/models/"
         "gemini-1.5-flash:generateContent?key=" + GEMINI_API_KEY
@@ -34,15 +37,18 @@ def ask():
         ]
     }
 
-    try:
-        r = requests.post(url, json=payload, timeout=30)
-        data = r.json()
+    r = requests.post(url, json=payload, timeout=30)
+    data = r.json()
 
-        reply = data["candidates"][0]["content"]["parts"][0]["text"]
-        return jsonify({"reply": reply})
+    # 🔍 DEBUG SAFE CHECK
+    if "candidates" not in data:
+        return jsonify({
+            "error": "AI response invalid",
+            "google_response": data
+        }), 500
 
-    except Exception as e:
-        return jsonify({"error": "AI request failed", "details": str(e)}), 500
+    reply = data["candidates"][0]["content"]["parts"][0]["text"]
+    return jsonify({"reply": reply})
 
 
 if __name__ == "__main__":
