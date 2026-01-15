@@ -1,45 +1,59 @@
 from flask import Flask, request, jsonify
 import os
-import google.generativeai as genai
+import requests
 
 app = Flask(__name__)
 
-# ✅ Gemini API key (Render Environment Variable से)
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-if not GEMINI_API_KEY:
-    return_text = "GEMINI_API_KEY environment variable set नहीं है"
-    raise RuntimeError(return_text)
-
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-pro")
-
-# 🔹 Root route (SLASH) – इसे change नहीं किया
 @app.route("/", methods=["GET"])
 def home():
-    return "AI API is running"
+    return "Real AI API is running"
 
-# 🔹 AI वाला route
 @app.route("/ask", methods=["GET", "POST"])
 def ask():
-    msg = request.args.get("message")
+    msg = None
 
-    if request.is_json:
-        msg = request.json.get("message")
+    if request.method == "GET":
+        msg = request.args.get("message")
+    else:
+        data = request.get_json(silent=True)
+        if data:
+            msg = data.get("message")
 
     if not msg:
-        return jsonify({"error": "Message नहीं मिला"}), 400
+        return jsonify({"error": "No message provided"}), 400
+
+    if not GEMINI_API_KEY:
+        return jsonify({"error": "Gemini API key missing"}), 500
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
+
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": msg}
+                ]
+            }
+        ]
+    }
+
+    r = requests.post(url, json=payload, timeout=30)
+
+    if r.status_code != 200:
+        return jsonify({"error": "AI request failed", "details": r.text}), 500
+
+    data = r.json()
 
     try:
-        response = model.generate_content(msg)
-        return jsonify({
-            "reply": response.text
-        })
-    except Exception as e:
-        return jsonify({
-            "error": str(e)
-        }), 500
+        reply = data["candidates"][0]["content"]["parts"][0]["text"]
+    except:
+        reply = "AI जवाब नहीं दे पाया"
+
+    return jsonify({"reply": reply})
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
